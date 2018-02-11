@@ -217,11 +217,11 @@ int main(int argc, char** argv) {
 
     /* Boucle d'affichage */
     int loop = 1;
-    float r = 0;
-    float g = 0;
-    float b = 0;
-    float x = 0;
-    float y = 0;
+    float r = 255.f;
+    float g = 255.f;
+    float b = 255.f;
+    float x = 0.f;
+    float y = 0.f;
     int i = 0;
     PrimitiveList pList = NULL;
     Primitive *prim = NULL;
@@ -229,7 +229,7 @@ int main(int argc, char** argv) {
     GLenum pType = GL_POINTS;
     int sizeC = sizeof(v_couleurs) / sizeof(*v_couleurs);
     glClear(GL_COLOR_BUFFER_BIT);
-    glClearColor(r, g, b, 1);
+    glClearColor(0, 0, 0, 1);
     SDL_GL_SwapBuffers();
     while(loop) {
 
@@ -276,15 +276,16 @@ int main(int argc, char** argv) {
                         else {
                             if(prim == NULL) {
                                 prim = allocPrimitive(pType);
-                                if(!prim) {
-                                    loop = 0;
-                                } else {
+                                if(prim == NULL) loop = 0;
+                                else
                                     addPrimitive(prim, &pList);
-                                }
                             }
-                            addPointToList(pt, &(prim->points));
-                            if(nbPointsInPrimitive(prim) >= nbPoints(prim->primitiveType)) {
-                                prim = NULL;
+
+                            if(prim != NULL) {
+                                addPointToList(pt, &(prim->points));
+                                if(nbPointsInPrimitive(prim) >= nbPoints(prim->primitiveType)) {
+                                    prim = NULL;
+                                }
                             }
                         }
 
