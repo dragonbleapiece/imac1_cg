@@ -39,15 +39,15 @@ typedef enum {
     CYAN
 } Couleurs;
 
-static const int v_couleurs[][3] = {
-    /*BLUE =*/ {0, 0, 255},
-    /*BLACK =*/ {0, 0, 0},
-    /*MAGENTA =*/ {255, 0, 255},
-    /*RED =*/ {255, 0, 0},
-    /*YELLOW =*/ {255, 255, 0},
-    /*WHITE =*/ {255, 255, 255},
-    /*GREEN =*/ {0, 255, 0},
-    /*CYAN =*/ {0, 255, 255}
+static const float v_couleurs[][3] = {
+    /*BLUE =*/ {0.f, 0.f, 255.f},
+    /*BLACK =*/ {0.f, 0.f, 0.f},
+    /*MAGENTA =*/ {255.f, 0.f, 255.f},
+    /*RED =*/ {255.f, 0.f, 0.f},
+    /*YELLOW =*/ {255.f, 255.f, 0.f},
+    /*WHITE =*/ {255.f, 255.f, 255.f},
+    /*GREEN =*/ {0.f, 255.f, 0.f},
+    /*CYAN =*/ {0.f, 255.f, 255.f}
 };
 
 static int pal = 0;
@@ -112,19 +112,31 @@ Primitive *allocPrimitive(GLenum primitiveType) {
     return temp;
 }
 
+Primitive *lastPrimitive(PrimitiveList *list) {
+    Primitive *prim = *list;
+    while(prim != NULL && prim->next != NULL) {
+        prim = prim->next;
+    }
+    return prim;
+}
+
 void addPrimitive(Primitive *primitive, PrimitiveList *list) {
-    primitive->next = *list;
-    *list = primitive;
+    Primitive *last = lastPrimitive(list);
+    if(last != NULL) {
+        last->next = primitive;
+    } else {
+        *list = primitive;
+    }
 }
 
 void drawPrimitives(PrimitiveList list) {
     Primitive *primitive = list;
-    glBegin(primitive->primitiveType);
     while(primitive != NULL) {
-        drawPoints(primitive->points);
+        glBegin(primitive->primitiveType);
+            drawPoints(primitive->points);
+        glEnd();
         primitive = primitive->next;
     }
-    glEnd();
 }
 
 void deletePrimitive(PrimitiveList *list) {
@@ -141,7 +153,7 @@ void deletePrimitive(PrimitiveList *list) {
 void palette() {
     if(!pal) {
         int i;
-        int size = (float)sizeof(v_couleurs) / (float)sizeof(*v_couleurs);
+        int size = sizeof(v_couleurs) / sizeof(*v_couleurs);
         GLfloat l = 2.0 / size;
         for(i = 0; i < size; ++i) {
             glColor3ub(v_couleurs[i][0], v_couleurs[i][1], v_couleurs[i][2]);
@@ -155,6 +167,33 @@ void palette() {
         SDL_GL_SwapBuffers();
         pal = !pal;
     }
+}
+
+int nbPoints(GLenum primitiveType) {
+    switch(primitiveType) {
+        case GL_POINTS:
+            return 1;
+        case GL_LINES:
+            return 2;
+        case GL_TRIANGLES:
+            return 3;
+        default:
+            break;
+    }
+
+    return 0;
+}
+
+int nbPointsInPrimitive(Primitive *primitive) {
+    int n = 0;
+    if(primitive != NULL) {
+        Point *temp = primitive->points;
+        while(temp != NULL) {
+            n++;
+            temp = temp->next;
+        }
+    }
+    return n;
 }
 
 int main(int argc, char** argv) {
@@ -181,8 +220,14 @@ int main(int argc, char** argv) {
     float r = 0;
     float g = 0;
     float b = 0;
-    int x = 0;
-    int y = 0;
+    float x = 0;
+    float y = 0;
+    int i = 0;
+    PrimitiveList pList = NULL;
+    Primitive *prim = NULL;
+    Point *pt = NULL;
+    GLenum pType = GL_POINTS;
+    int sizeC = sizeof(v_couleurs) / sizeof(*v_couleurs);
     glClear(GL_COLOR_BUFFER_BIT);
     glClearColor(r, g, b, 1);
     SDL_GL_SwapBuffers();
@@ -193,6 +238,10 @@ int main(int argc, char** argv) {
 
         /* Placer ici le code de dessin */
 
+        if(!pal) {
+            drawPrimitives(pList);
+            SDL_GL_SwapBuffers();
+        }
 
         /* Echange du front et du back buffer : mise à jour de la fenêtre */
         /*SDL_GL_SwapBuffers();*/
@@ -213,14 +262,33 @@ int main(int argc, char** argv) {
                 /* Clic souris */
                 case SDL_MOUSEBUTTONUP:
                     printf("clic en (%d, %d)\n", e.button.x, e.button.y);
-                    x = e.button.x;
-                    y = e.button.y;
-                    break;
+                    if(pal) {
+                        i = (e.button.x / (float)WINDOW_WIDTH) * (float)(sizeC);
+                        r = v_couleurs[i][0];
+                        g = v_couleurs[i][1];
+                        b = v_couleurs[i][2];
+                        printf("New Color : %f,%f,%f\n", r, g, b);
+                    } else {
+                        x = e.button.x;
+                        y = e.button.y;
+                        pt = allocPoint(x, y, r, g, b);
+                        if(pt == NULL) loop = 0;
+                        else {
+                            if(prim == NULL) {
+                                prim = allocPrimitive(pType);
+                                if(!prim) {
+                                    loop = 0;
+                                } else {
+                                    addPrimitive(prim, &pList);
+                                }
+                            }
+                            addPointToList(pt, &(prim->points));
+                            if(nbPointsInPrimitive(prim) >= nbPoints(prim->primitiveType)) {
+                                prim = NULL;
+                            }
+                        }
 
-                case SDL_MOUSEMOTION:
-                    r = e.button.x % 255 / 255.0;
-                    g = e.button.y % 255 / 255.0;
-                    b = (e.button.x + e.button.y) % 255 / 255.0;
+                    }
                     break;
 
                 /* Touche clavier */
@@ -229,6 +297,15 @@ int main(int argc, char** argv) {
                     switch(e.key.keysym.sym) {
                         case(SDLK_q):
                             loop = 0;
+                            break;
+                        case(SDLK_p):
+                            pType = GL_POINTS;
+                            break;
+                        case(SDLK_l):
+                            pType = GL_LINES;
+                            break;
+                        case(SDLK_t):
+                            pType = GL_TRIANGLES;
                             break;
                         case(SDLK_SPACE):
                             if(e.key.state == SDL_PRESSED) {
@@ -246,6 +323,7 @@ int main(int argc, char** argv) {
                         case(SDLK_SPACE):
                             if(e.key.state == SDL_RELEASED) {
                                 SDL_GL_SwapBuffers();
+                                glClear(GL_COLOR_BUFFER_BIT);
                                 pal = !pal;
                             }
                             break;
@@ -274,6 +352,8 @@ int main(int argc, char** argv) {
             SDL_Delay(FRAMERATE_MILLISECONDS - elapsedTime);
         }
     }
+
+    deletePrimitive(&pList);
 
     /* Liberation des ressources associées à la SDL */
     SDL_Quit();
