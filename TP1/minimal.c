@@ -39,7 +39,7 @@ typedef enum {
     CYAN
 } Couleurs;
 
-static int v_couleurs[][3] = {
+static const int v_couleurs[][3] = {
     /*BLUE =*/ {0, 0, 255},
     /*BLACK =*/ {0, 0, 0},
     /*MAGENTA =*/ {255, 0, 255},
@@ -49,6 +49,8 @@ static int v_couleurs[][3] = {
     /*GREEN =*/ {0, 255, 0},
     /*CYAN =*/ {0, 255, 255}
 };
+
+static int pal = 0;
 
 /* Fonctions */
 void onResize() {
@@ -82,9 +84,7 @@ void drawPoints(PointList list) {
     Point *point = list;
     while(point != NULL) {
         glColor3ub(point->r, point->g, point->b);
-        glBegin(GL_POINTS);
-            glVertex2f(-1 + 2. * point->x / WINDOW_WIDTH, -(-1 + 2. * point->y / WINDOW_HEIGHT));
-        glEnd();
+        glVertex2f(-1 + 2. * point->x / WINDOW_WIDTH, -(-1 + 2. * point->y / WINDOW_HEIGHT));
         point = point->next;
     }
 }
@@ -119,10 +119,12 @@ void addPrimitive(Primitive *primitive, PrimitiveList *list) {
 
 void drawPrimitives(PrimitiveList list) {
     Primitive *primitive = list;
+    glBegin(primitive->primitiveType);
     while(primitive != NULL) {
         drawPoints(primitive->points);
         primitive = primitive->next;
     }
+    glEnd();
 }
 
 void deletePrimitive(PrimitiveList *list) {
@@ -133,6 +135,25 @@ void deletePrimitive(PrimitiveList *list) {
         deletePoints(&(temp->points));
         free(temp);
         temp = primitive;
+    }
+}
+
+void palette() {
+    if(!pal) {
+        int i;
+        int size = (float)sizeof(v_couleurs) / (float)sizeof(*v_couleurs);
+        GLfloat l = 2.0 / size;
+        for(i = 0; i < size; ++i) {
+            glColor3ub(v_couleurs[i][0], v_couleurs[i][1], v_couleurs[i][2]);
+            glBegin(GL_QUADS);
+                glVertex2f(-1 + l * i, -1);
+                glVertex2f(-1 + l * (i + 1), -1);
+                glVertex2f(-1 + l * (i + 1), 1);
+                glVertex2f(-1 + l * i, 1);
+            glEnd();
+        }
+        SDL_GL_SwapBuffers();
+        pal = !pal;
     }
 }
 
@@ -147,7 +168,7 @@ int main(int argc, char** argv) {
     /*SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 0);*/
 
     /* Ouverture d'une fenêtre et création d'un contexte OpenGL */
-    if(NULL == SDL_SetVideoMode(WINDOW_WIDTH, WINDOW_HEIGHT, BIT_PER_PIXEL, SDL_OPENGL /*| SDL_GL_DOUBLEBUFFER*/ | SDL_RESIZABLE)) {
+    if(NULL == SDL_SetVideoMode(WINDOW_WIDTH, WINDOW_HEIGHT, BIT_PER_PIXEL, SDL_OPENGL | SDL_GL_DOUBLEBUFFER | SDL_RESIZABLE)) {
         fprintf(stderr, "Impossible d'ouvrir la fenetre. Fin du programme.\n");
         return EXIT_FAILURE;
     }
@@ -163,20 +184,18 @@ int main(int argc, char** argv) {
     int x = 0;
     int y = 0;
     glClear(GL_COLOR_BUFFER_BIT);
+    glClearColor(r, g, b, 1);
+    SDL_GL_SwapBuffers();
     while(loop) {
 
         /* Récupération du temps au début de la boucle */
         Uint32 startTime = SDL_GetTicks();
 
         /* Placer ici le code de dessin */
-        glClearColor(r, g, b, 1);
-        glColor3ub(r * 255, g * 255, b * 255);
-        glBegin(GL_POINTS);
-            glVertex2f(-1 + 2. * x / WINDOW_WIDTH, -(-1 + 2. * y / WINDOW_HEIGHT));
-        glEnd();
+
 
         /* Echange du front et du back buffer : mise à jour de la fenêtre */
-        SDL_GL_SwapBuffers();
+        /*SDL_GL_SwapBuffers();*/
 
         /* Boucle traitant les evenements */
         SDL_Event e;
@@ -207,9 +226,31 @@ int main(int argc, char** argv) {
                 /* Touche clavier */
                 case SDL_KEYDOWN:
                     printf("touche pressée (code = %d)\n", e.key.keysym.sym);
-                    if(e.key.keysym.sym == SDLK_q) {
-                        loop = 0;
-                        break;
+                    switch(e.key.keysym.sym) {
+                        case(SDLK_q):
+                            loop = 0;
+                            break;
+                        case(SDLK_SPACE):
+                            if(e.key.state == SDL_PRESSED) {
+                                palette();
+                            }
+                            break;
+                        default:
+                            break;
+                    }
+                    break;
+
+                case SDL_KEYUP:
+                    printf("touche relachee (code = %d)\n", e.key.keysym.sym);
+                    switch(e.key.keysym.sym) {
+                        case(SDLK_SPACE):
+                            if(e.key.state == SDL_RELEASED) {
+                                SDL_GL_SwapBuffers();
+                                pal = !pal;
+                            }
+                            break;
+                        default:
+                            break;
                     }
                     break;
 
@@ -217,7 +258,7 @@ int main(int argc, char** argv) {
                     WINDOW_HEIGHT = e.resize.h;
                     WINDOW_WIDTH = e.resize.w;
                     onResize();
-                    SDL_SetVideoMode(WINDOW_WIDTH, WINDOW_HEIGHT, BIT_PER_PIXEL, SDL_OPENGL /*| SDL_GL_DOUBLEBUFFER*/ | SDL_RESIZABLE);
+                    SDL_SetVideoMode(WINDOW_WIDTH, WINDOW_HEIGHT, BIT_PER_PIXEL, SDL_OPENGL | SDL_GL_DOUBLEBUFFER | SDL_RESIZABLE);
                     break;
 
                 default:
