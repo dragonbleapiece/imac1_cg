@@ -256,6 +256,7 @@ int main(int argc, char** argv) {
         /* Placer ici le code de dessin */
 
         if(!pal) {
+            glClear(GL_COLOR_BUFFER_BIT);
             drawPrimitives(pList);
             SDL_GL_SwapBuffers();
         }
@@ -300,7 +301,8 @@ int main(int argc, char** argv) {
 
                             if(prim != NULL) {
                                 addPointToList(pt, &(prim->points));
-                                if(nbPointsInPrimitive(prim) >= nbPoints(prim->primitiveType)) {
+                                if((nbPointsInPrimitive(prim) >= nbPoints(prim->primitiveType) && !needsEndClick(prim->primitiveType))
+                                   || (needsEndClick(prim->primitiveType) && e.button.button == SDL_BUTTON_RIGHT )) {
                                     prim = NULL;
                                 }
                             }
@@ -308,6 +310,8 @@ int main(int argc, char** argv) {
 
                     }
                     break;
+
+
 
                 /* Touche clavier */
                 case SDL_KEYDOWN:
@@ -318,6 +322,15 @@ int main(int argc, char** argv) {
                             break;
                         case(SDLK_p):
                             pType = GL_POINTS;
+                            break;
+                        case(SDLK_s):
+                            pType = GL_LINE_STRIP;
+                            break;
+                        case(SDLK_n):
+                            pType = GL_TRIANGLE_STRIP;
+                            break;
+                        case(SDLK_o):
+                            pType = GL_LINE_LOOP;
                             break;
                         case(SDLK_l):
                             pType = GL_LINES;

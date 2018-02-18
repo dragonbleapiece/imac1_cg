@@ -1,8 +1,11 @@
 #include <SDL/SDL.h>
 #include <GL/gl.h>
 #include <GL/glu.h>
+#include <math.h>
 #include <stdlib.h>
 #include <stdio.h>
+
+#define MAXCIRCLE 20.0
 
 /* Dimensions de la fenêtre */
 static unsigned int WINDOW_WIDTH = 400;
@@ -16,6 +19,12 @@ static const Uint32 FRAMERATE_MILLISECONDS = 1000 / 60;
 
 /*Structures*/
 
+typedef enum {
+  SQUARE,
+  CIRCLE,
+  LANDMARK
+} MYenum;
+
 typedef struct Point {
     float x, y; /*Position 2D du point*/
     unsigned char r, g, b; /*Couleur du point*/
@@ -23,8 +32,9 @@ typedef struct Point {
 } Point, *PointList;
 
 typedef struct Primitive {
-    GLenum primitiveType;
+    MYenum primitiveType;
     PointList points;
+    int ligne;
     struct Primitive* next;
 } Primitive, *PrimitiveList;
 
@@ -58,6 +68,75 @@ void onResize() {
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
     gluOrtho2D(-1., 1., -1., 1.);
+}
+
+void drawRectangle(PointList list) {
+  if(list != NULL && list->next != NULL) {
+    Point *center = list->next;
+    Point *second = list;
+    float dx = center->x - second->x;
+    float dy = center->y - second->y;
+    glBegin(GL_QUADS);
+      glColor3ub(center->r, center->g, center->b);
+      glVertex2f(-1 + 2. * second->x / WINDOW_WIDTH, -(-1 + 2. * second->y / WINDOW_HEIGHT));
+      glVertex2f(-1 + 2. * (second->x + 2. * dx) / WINDOW_WIDTH, -(-1 + 2. * second->y / WINDOW_HEIGHT));
+      glVertex2f(-1 + 2. * (second->x + 2. * dx) / WINDOW_WIDTH, -(-1 + 2. * (second->y + 2. * dy) / WINDOW_HEIGHT));
+      glVertex2f(-1 + 2. * second->x / WINDOW_WIDTH, -(-1 + 2. * (second->y + 2. * dy) / WINDOW_HEIGHT));
+    glEnd();
+  }
+}
+
+
+void drawSquare(PointList list, int ligne) {
+  if(list != NULL && list->next != NULL) {
+    Point *center = list->next;
+    Point *second = list;
+    int i = 0;
+    float X, Y;
+    GLenum primitiveType = ligne ? GL_LINE_LOOP : GL_QUADS;
+    glBegin(primitiveType);
+      glColor3ub(center->r, center->g, center->b);
+      for(i = 0; i < 4; ++i) {
+        X = (second->x - center->x) * cos((M_PI / 2.) * i) - (second->y - center->y) * sin((M_PI / 2.) * i);
+        Y = (second->x - center->x) * sin((M_PI / 2.) * i) + (second->y - center->y) * cos((M_PI / 2.) * i);
+        glVertex2f(-1 + 2. * (center->x + X) / WINDOW_WIDTH, -(-1 + 2. * (center->y + Y) / WINDOW_HEIGHT));
+      }
+
+    glEnd();
+  }
+}
+
+void drawLandmark(PointList list) {
+  if(list != NULL) {
+    Point *center = list;
+    glBegin(GL_LINES);
+    /*Axe X*/
+      glColor3ub(255, 0, 0);
+      glVertex2f(-1, -(-1 + 2. * center->y / WINDOW_HEIGHT));
+      glVertex2f(1, -(-1 + 2. * center->y / WINDOW_HEIGHT));
+
+    /*Axe Y*/
+      glColor3ub(0, 255, 0);
+      glVertex2f(-1 + 2. * center->x / WINDOW_WIDTH, -1);
+      glVertex2f(-1 + 2. * center->x / WINDOW_WIDTH, 1);
+    glEnd();
+  }
+}
+
+void drawCircle(PointList list, int ligne) {
+  if(list != NULL && list->next != NULL) {
+    Point *center = list->next;
+    Point *second = list;
+    float distance = sqrt(pow(abs(center->x - second->x), 2) + pow(abs(center->y - second->y), 2));
+    int i;
+    GLenum primitiveType = ligne ? GL_LINE_LOOP : GL_POLYGON;
+    glBegin(primitiveType);
+      glColor3ub(center->r, center->g, center->b);
+      for(i = 0; i <= MAXCIRCLE; ++i) {
+        glVertex2f(-1 + 2. * (center->x + distance * cos(((2.0 * M_PI) / MAXCIRCLE) * i)) / WINDOW_WIDTH, -(-1 + 2. * (center->y + distance * sin(((2.0 * M_PI) / MAXCIRCLE) * i)) / WINDOW_HEIGHT));
+      }
+    glEnd();
+  }
 }
 
 Point *allocPoint(float x, float y, unsigned char r, unsigned char g, unsigned char b) {
@@ -99,13 +178,14 @@ void deletePoints(PointList *list) {
     }
 }
 
-Primitive *allocPrimitive(GLenum primitiveType) {
+Primitive *allocPrimitive(MYenum primitiveType, int ligne) {
     Primitive *temp;
     temp = (Primitive *) malloc(sizeof(*temp));
 
     if(temp != NULL) {
         temp->primitiveType = primitiveType;
         temp->points = NULL;
+        temp->ligne = ligne;
         temp->next = NULL;
     }
 
@@ -132,9 +212,22 @@ void addPrimitive(Primitive *primitive, PrimitiveList *list) {
 void drawPrimitives(PrimitiveList list) {
     Primitive *primitive = list;
     while(primitive != NULL) {
-        glBegin(primitive->primitiveType);
+        /*glBegin(primitive->primitiveType);
             drawPoints(primitive->points);
-        glEnd();
+        glEnd();*/
+        switch(primitive->primitiveType) {
+          case(SQUARE):
+            drawSquare(primitive->points, primitive->ligne);
+            break;
+          case(LANDMARK):
+            drawLandmark(primitive->points);
+            break;
+          case(CIRCLE):
+            drawCircle(primitive->points, primitive->ligne);
+            break;
+          default:
+            break;
+        }
         primitive = primitive->next;
     }
 }
@@ -169,16 +262,14 @@ void palette() {
     }
 }
 
-int nbPoints(GLenum primitiveType) {
+int nbPoints(MYenum primitiveType) {
     switch(primitiveType) {
-        case GL_POINTS:
-            return 1;
-        case GL_LINES:
+        case SQUARE:
             return 2;
-        case GL_TRIANGLES:
-            return 3;
-        case GL_QUADS:
-            return 4;
+        case CIRCLE:
+            return 2;
+        case LANDMARK:
+            return 1;
         default:
             break;
     }
@@ -196,21 +287,6 @@ int nbPointsInPrimitive(Primitive *primitive) {
         }
     }
     return n;
-}
-
-int needsEndClick(GLenum primitiveType) {
-    switch(primitiveType) {
-        case GL_LINE_STRIP:
-            return 1;
-        case GL_LINE_LOOP:
-            return 1;
-        case GL_TRIANGLE_STRIP:
-            return 1;
-        default:
-            break;
-    }
-
-    return 0;
 }
 
 int main(int argc, char** argv) {
@@ -234,6 +310,7 @@ int main(int argc, char** argv) {
 
     /* Boucle d'affichage */
     int loop = 1;
+    int ligne = 0;
     float r = 255.f;
     float g = 255.f;
     float b = 255.f;
@@ -243,7 +320,7 @@ int main(int argc, char** argv) {
     PrimitiveList pList = NULL;
     Primitive *prim = NULL;
     Point *pt = NULL;
-    GLenum pType = GL_POINTS;
+    MYenum pType = SQUARE;
     int nCouleurs = sizeof(v_couleurs) / sizeof(*v_couleurs);
     glClear(GL_COLOR_BUFFER_BIT);
     glClearColor(0, 0, 0, 1);
@@ -256,6 +333,7 @@ int main(int argc, char** argv) {
         /* Placer ici le code de dessin */
 
         if(!pal) {
+            glClear(GL_COLOR_BUFFER_BIT);
             drawPrimitives(pList);
             SDL_GL_SwapBuffers();
         }
@@ -292,7 +370,7 @@ int main(int argc, char** argv) {
                         if(pt == NULL) loop = 0;
                         else {
                             if(prim == NULL) {
-                                prim = allocPrimitive(pType);
+                                prim = allocPrimitive(pType, ligne);
                                 if(prim == NULL) loop = 0;
                                 else
                                     addPrimitive(prim, &pList);
@@ -309,6 +387,8 @@ int main(int argc, char** argv) {
                     }
                     break;
 
+
+
                 /* Touche clavier */
                 case SDL_KEYDOWN:
                     printf("touche pressée (code = %d)\n", e.key.keysym.sym);
@@ -317,13 +397,20 @@ int main(int argc, char** argv) {
                             loop = 0;
                             break;
                         case(SDLK_p):
-                            pType = GL_POINTS;
+                            break;
+                        case(SDLK_s):
+                            pType = SQUARE;
+                            break;
+                        case(SDLK_n):
+                            break;
+                        case(SDLK_o):
+                            ligne = !ligne;
                             break;
                         case(SDLK_l):
-                            pType = GL_LINES;
+                            pType = LANDMARK;
                             break;
-                        case(SDLK_t):
-                            pType = GL_TRIANGLES;
+                        case(SDLK_c):
+                            pType = CIRCLE;
                             break;
                         case(SDLK_SPACE):
                             if(e.key.state == SDL_PRESSED) {
