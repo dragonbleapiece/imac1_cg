@@ -35,6 +35,7 @@ typedef struct Primitive {
     MYenum primitiveType;
     PointList points;
     int ligne;
+    float tx;
     struct Primitive* next;
 } Primitive, *PrimitiveList;
 
@@ -86,7 +87,6 @@ void drawRectangle(PointList list) {
   }
 }
 
-
 void drawSquare(PointList list, int ligne) {
   if(list != NULL && list->next != NULL) {
     Point *center = list->next;
@@ -94,6 +94,7 @@ void drawSquare(PointList list, int ligne) {
     int i = 0;
     float X, Y;
     GLenum primitiveType = ligne ? GL_LINE_LOOP : GL_QUADS;
+
     glBegin(primitiveType);
       glColor3ub(center->r, center->g, center->b);
       for(i = 0; i < 4; ++i) {
@@ -186,6 +187,7 @@ Primitive *allocPrimitive(MYenum primitiveType, int ligne) {
         temp->primitiveType = primitiveType;
         temp->points = NULL;
         temp->ligne = ligne;
+        temp->tx = 0.0;
         temp->next = NULL;
     }
 
@@ -215,6 +217,11 @@ void drawPrimitives(PrimitiveList list) {
         /*glBegin(primitive->primitiveType);
             drawPoints(primitive->points);
         glEnd();*/
+
+        glLoadIdentity();
+        glTranslatef(primitive->tx, 0, 0);
+        primitive->tx += 0.001;
+
         switch(primitive->primitiveType) {
           case(SQUARE):
             drawSquare(primitive->points, primitive->ligne);
